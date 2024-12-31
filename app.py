@@ -1,11 +1,10 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from requests_html import HTMLSession
-import base64
+import requests
+from bs4 import BeautifulSoup
 import logging
 import os
 import random
-import time
 import json
 
 app = Flask(__name__)
@@ -23,18 +22,17 @@ def get_random_user_agent():
     ]
     return random.choice(user_agents)
 
-def check_single_url(url, anchor=None, price=None, stock=None, use_proxy=False, headless=True, take_screenshot=False):
+def check_single_url(url, anchor=None, price=None, stock=None, use_proxy=False):
     try:
         logger.info(f"URL kontrolü başlıyor: {url}")
-        
-        session = HTMLSession()
         
         headers = {
             'User-Agent': get_random_user_agent(),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive'
+            'Connection': 'keep-alive',
+            'Referer': 'https://www.google.com/'
         }
         
         proxies = None
@@ -50,14 +48,25 @@ def check_single_url(url, anchor=None, price=None, stock=None, use_proxy=False, 
                 'https': proxy
             }
         
+        session = requests.Session()
+        
+        # Ana domain'i ziyaret et
+        try:
+            domain = url.split('/')[2]
+            base_url = f"https://{domain}"
+            logger.info(f"Ana domain ziyaret ediliyor: {base_url}")
+            session.get(base_url, headers=headers, proxies=proxies, timeout=30)
+        except Exception as e:
+            logger.warning(f"Ana domain ziyareti başarısız: {str(e)}")
+        
+        # Hedef URL'yi ziyaret et
         response = session.get(
             url, 
             headers=headers, 
-            proxies=proxies if use_proxy else None
+            proxies=proxies,
+            timeout=30,
+            allow_redirects=True
         )
-        
-        # JavaScript'i çalıştır
-        response.html.render(timeout=20)
         
         result = {
             'status': response.status_code,
@@ -69,35 +78,29 @@ def check_single_url(url, anchor=None, price=None, stock=None, use_proxy=False, 
         }
         
         if response.status_code == 200:
-            # Ekran görüntüsü
-            if take_screenshot:
-                try:
-                    screenshot = response.html.screenshot(full=True)
-                    result['screenshot'] = base64.b64encode(screenshot).decode('utf-8')
-                except:
-                    logger.warning("Ekran görüntüsü alınamadı")
+            soup = BeautifulSoup(response.text, 'html.parser')
             
             # Anchor kontrolü
             if anchor:
-                elements = response.html.find(anchor)
-                if elements:
-                    result['anchor'] = 1
-                    result['anchor_text'] = elements[0].text
+                anchor_element = soup.select_one(anchor)
+                result['anchor'] = 1 if anchor_element else 0
+                if anchor_element:
+                    result['anchor_text'] = anchor_element.text.strip()
             
             # Fiyat kontrolü
             if price:
-                elements = response.html.find(price)
-                if elements:
-                    price_text = elements[0].text
+                price_element = soup.select_one(price)
+                if price_element:
+                    price_text = price_element.text.strip()
                     result['price'] = extract_price(price_text)
                     result['price_raw'] = price_text
             
             # Stok kontrolü
             if stock:
-                elements = response.html.find(stock)
-                result['stock'] = 1 if elements else 0
-                if elements:
-                    result['stock_text'] = elements[0].text
+                stock_element = soup.select_one(stock)
+                result['stock'] = 1 if stock_element else 0
+                if stock_element:
+                    result['stock_text'] = stock_element.text.strip()
         
         return result, None
         
@@ -128,8 +131,6 @@ def check_url():
         price = data.get('price')
         stock = data.get('stock')
         use_proxy = data.get('useProxy', False)
-        headless = data.get('headless', True)
-        take_screenshot = data.get('screenshot', False)
         
         if not url:
             return jsonify({'error': 'URL gerekli'}), 400
@@ -139,9 +140,7 @@ def check_url():
             anchor=anchor,
             price=price,
             stock=stock,
-            use_proxy=use_proxy,
-            headless=headless,
-            take_screenshot=take_screenshot
+            use_proxy=use_proxy
         )
         
         if error:
