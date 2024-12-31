@@ -1,13 +1,8 @@
 services:
   - type: web
     name: url-checker
-    env: python
-    buildCommand: |
-      python -m pip install --no-cache-dir --upgrade pip
-      pip install --no-cache-dir -r requirements.txt
-    startCommand: gunicorn app:app
+    env: docker
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.9
-      - key: PIP_NO_CACHE_DIR
-        value: "1"
+      - key: PORT
+        value: 8000
