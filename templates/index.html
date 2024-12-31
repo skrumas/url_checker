@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>URL Kontrol Aracı</title>
+    <title>URL Kontrol</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,16 +21,8 @@
         }
         
         h1 {
-            display: flex;
-            align-items: center;
-            gap: 10px;
             color: #333;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-        
-        .description {
-            color: #666;
+            text-align: center;
             margin-bottom: 20px;
         }
         
@@ -44,7 +36,7 @@
             color: #333;
         }
         
-        input[type="text"], input[type="url"] {
+        input[type="url"], input[type="text"] {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
@@ -59,22 +51,10 @@
             margin: 20px 0;
         }
         
-        .advanced-options h2 {
-            font-size: 16px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
         .switch-container {
             display: flex;
             align-items: center;
             margin-bottom: 10px;
-        }
-        
-        .switch-container label {
-            margin: 0 0 0 10px;
         }
         
         .switch {
@@ -82,6 +62,7 @@
             display: inline-block;
             width: 40px;
             height: 20px;
+            margin-right: 10px;
         }
         
         .switch input {
@@ -131,10 +112,6 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
         }
         
         button:hover {
@@ -143,27 +120,32 @@
         
         #result {
             margin-top: 20px;
-        }
-        
-        .error {
-            color: #dc3545;
-            background-color: #f8d7da;
-            padding: 10px;
+            padding: 15px;
             border-radius: 4px;
         }
         
         .success {
-            color: #28a745;
             background-color: #d4edda;
-            padding: 10px;
-            border-radius: 4px;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .result-item {
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🔗 URL Kontrol Aracı</h1>
-        <p class="description">Web sayfalarındaki öğeleri kontrol etmek için CSS selektörlerini kullanın</p>
         
         <form id="urlForm">
             <div class="form-group">
@@ -224,15 +206,13 @@
         document.getElementById('urlForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const formData = {
-                url: document.getElementById('url').value,
-                anchor: document.getElementById('anchor').value,
-                price: document.getElementById('price').value,
-                stock: document.getElementById('stock').value,
-                useProxy: document.getElementById('proxy').checked,
-                headless: document.getElementById('headless').checked,
-                screenshot: document.getElementById('screenshot').checked
-            };
+            const url = document.getElementById('url').value;
+            const anchor = document.getElementById('anchor').value;
+            const price = document.getElementById('price').value;
+            const stock = document.getElementById('stock').value;
+            const useProxy = document.getElementById('proxy').checked;
+            const headless = document.getElementById('headless').checked;
+            const screenshot = document.getElementById('screenshot').checked;
             
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = '<p>Kontrol ediliyor...</p>';
@@ -243,24 +223,61 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify({
+                        url,
+                        anchor,
+                        price,
+                        stock,
+                        useProxy,
+                        headless,
+                        screenshot
+                    })
                 });
                 
                 const data = await response.json();
                 
                 if (data.error) {
-                    resultDiv.innerHTML = `<div class="error">${data.error}</div>`;
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <p>${data.error}</p>
+                        </div>
+                    `;
                 } else {
                     resultDiv.innerHTML = `
                         <div class="${data.accessible ? 'success' : 'error'}">
-                            <p><strong>URL:</strong> ${data.url}</p>
-                            <p><strong>Durum Kodu:</strong> ${data.status}</p>
-                            <p><strong>Erişilebilirlik:</strong> ${data.accessible ? 'Erişilebilir' : 'Erişilemez'}</p>
+                            <div class="result-item">
+                                <strong>URL:</strong> ${data.url}
+                            </div>
+                            <div class="result-item">
+                                <strong>Durum Kodu:</strong> ${data.status}
+                            </div>
+                            <div class="result-item">
+                                <strong>Erişilebilirlik:</strong> ${data.accessible ? 'Erişilebilir' : 'Erişilemez'}
+                            </div>
+                            ${data.anchor !== undefined ? `
+                                <div class="result-item">
+                                    <strong>Anchor:</strong> ${data.anchor}
+                                </div>
+                            ` : ''}
+                            ${data.price !== undefined ? `
+                                <div class="result-item">
+                                    <strong>Fiyat:</strong> ${data.price}
+                                </div>
+                            ` : ''}
+                            ${data.stock !== undefined ? `
+                                <div class="result-item">
+                                    <strong>Stok:</strong> ${data.stock}
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 }
             } catch (error) {
-                resultDiv.innerHTML = `<div class="error">Hata: ${error}</div>`;
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <p>Hata: ${error}</p>
+                    </div>
+                `;
             }
         });
     </script>
