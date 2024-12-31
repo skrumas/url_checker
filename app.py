@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import requests
+from bs4 import BeautifulSoup
 import re
 import logging
 import os
@@ -12,6 +13,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def extract_price(text):
+    if not text:
+        return '-'
     # Fiyat formatını kontrol et (123,45 veya 123.45)
     price_pattern = r'\d+[.,]\d{2}'
     match = re.search(price_pattern, text)
@@ -30,17 +33,21 @@ def check_single_url(url, anchor=None, price=None, stock=None):
         result = {
             'status': response.status_code,
             'url': url,
-            'accessible': response.status_code == 200
+            'accessible': response.status_code == 200,
+            'anchor': 0,  # Varsayılan değerler
+            'price': '-',
+            'stock': 0
         }
         
         if response.status_code == 200:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(response.text, 'html.parser')
             
             # Anchor kontrolü
             if anchor:
                 anchor_element = soup.select_one(anchor)
                 result['anchor'] = 1 if anchor_element else 0
+                if anchor_element:
+                    result['anchor_text'] = anchor_element.text.strip()
             
             # Fiyat kontrolü
             if price:
@@ -48,13 +55,14 @@ def check_single_url(url, anchor=None, price=None, stock=None):
                 if price_element:
                     price_text = price_element.text.strip()
                     result['price'] = extract_price(price_text)
-                else:
-                    result['price'] = '-'
+                    result['price_raw'] = price_text
             
             # Stok kontrolü
             if stock:
                 stock_element = soup.select_one(stock)
                 result['stock'] = 1 if stock_element else 0
+                if stock_element:
+                    result['stock_text'] = stock_element.text.strip()
         
         return result, None
         
@@ -81,13 +89,29 @@ def check_url():
         result, error = check_single_url(url, anchor, price, stock)
         
         if error:
-            return jsonify({'error': f'Bir hata oluştu: {error}'}), 500
+            return jsonify({
+                'error': f'Bir hata oluştu: {error}',
+                'status': 500,
+                'url': url,
+                'accessible': False,
+                'anchor': 0,
+                'price': '-',
+                'stock': 0
+            }), 500
             
         return jsonify(result)
         
     except Exception as e:
         logger.error(f"Genel hata: {str(e)}")
-        return jsonify({'error': f'Bir hata oluştu: {str(e)}'}), 500
+        return jsonify({
+            'error': f'Bir hata oluştu: {str(e)}',
+            'status': 500,
+            'url': url,
+            'accessible': False,
+            'anchor': 0,
+            'price': '-',
+            'stock': 0
+        }), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
