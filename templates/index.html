@@ -4,246 +4,265 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>URL Kontrol Aracı</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-        .main-container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 2rem;
+        
+        .container {
             background-color: white;
-            border-radius: 15px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        .form-control:focus {
-            box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.15);
-            border-color: #0d6efd;
+        
+        h1 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 20px;
         }
+        
+        .description {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        input[type="text"], input[type="url"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
         .advanced-options {
             background-color: #f8f9fa;
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 4px;
             margin: 20px 0;
         }
-        .loading {
-            text-align: center;
-            padding: 2rem;
+        
+        .advanced-options h2 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
-        .result-card {
+        
+        .switch-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .switch-container label {
+            margin: 0 0 0 10px;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #007bff;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        #result {
             margin-top: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .success {
-            color: #198754;
-        }
+        
         .error {
             color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .success {
+            color: #28a745;
+            background-color: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
-    <div class="main-container">
-        <div class="header">
-            <h2 class="mb-2"><i class="fas fa-link"></i> URL Kontrol Aracı</h2>
-            <p class="text-muted">Web sayfalarındaki öğeleri kontrol etmek için CSS selektörlerini kullanın</p>
-        </div>
-
-        <form id="checkForm">
-            <!-- URL ve Selektör Alanları -->
-            <div class="mb-3">
-                <label for="url" class="form-label">URL:</label>
-                <input type="url" class="form-control" id="url" required 
-                       placeholder="https://example.com/page">
+    <div class="container">
+        <h1>🔗 URL Kontrol Aracı</h1>
+        <p class="description">Web sayfalarındaki öğeleri kontrol etmek için CSS selektörlerini kullanın</p>
+        
+        <form id="urlForm">
+            <div class="form-group">
+                <label for="url">URL:</label>
+                <input type="url" id="url" required>
             </div>
             
-            <div class="mb-3">
-                <label for="anchor_selector" class="form-label">Anchor Selektörü:</label>
-                <input type="text" class="form-control" id="anchor_selector" required 
-                       placeholder="örn: h1.product-title">
+            <div class="form-group">
+                <label for="anchor">Anchor Selektörü:</label>
+                <input type="text" id="anchor" placeholder="h1.x-name">
             </div>
             
-            <div class="mb-3">
-                <label for="price_selector" class="form-label">Fiyat Selektörü:</label>
-                <input type="text" class="form-control" id="price_selector" required 
-                       placeholder="örn: .price-box .price">
+            <div class="form-group">
+                <label for="price">Fiyat Selektörü:</label>
+                <input type="text" id="price" placeholder=".x-price .g-price">
             </div>
             
-            <div class="mb-3">
-                <label for="stock_selector" class="form-label">Stok Selektörü:</label>
-                <input type="text" class="form-control" id="stock_selector" required 
-                       placeholder="örn: .stock-status">
+            <div class="form-group">
+                <label for="stock">Stok Selektörü:</label>
+                <input type="text" id="stock" placeholder=".x-add-to-cart-buttons">
             </div>
-
-            <!-- Gelişmiş Seçenekler -->
+            
             <div class="advanced-options">
-                <h5 class="mb-3">
-                    <i class="fas fa-cog"></i> Gelişmiş Seçenekler
-                </h5>
+                <h2>⚙️ Gelişmiş Seçenekler</h2>
                 
-                <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" id="useProxy">
-                    <label class="form-check-label" for="useProxy">
-                        Proxy Kullan
-                        <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip" 
-                           title="IP engellenmesini önlemek için proxy kullanır"></i>
+                <div class="switch-container">
+                    <label class="switch">
+                        <input type="checkbox" id="proxy">
+                        <span class="slider"></span>
                     </label>
+                    <label for="proxy">Proxy Kullan</label>
                 </div>
-
-                <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" id="headless" checked>
-                    <label class="form-check-label" for="headless">
-                        Headless Mod
-                        <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip" 
-                           title="Tarayıcıyı arka planda çalıştırır"></i>
+                
+                <div class="switch-container">
+                    <label class="switch">
+                        <input type="checkbox" id="headless" checked>
+                        <span class="slider"></span>
                     </label>
+                    <label for="headless">Headless Mod</label>
                 </div>
-
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="takeScreenshot" checked>
-                    <label class="form-check-label" for="takeScreenshot">
-                        Ekran Görüntüsü Al
-                        <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip" 
-                           title="Sayfanın ekran görüntüsünü kaydeder"></i>
+                
+                <div class="switch-container">
+                    <label class="switch">
+                        <input type="checkbox" id="screenshot" checked>
+                        <span class="slider"></span>
                     </label>
+                    <label for="screenshot">Ekran Görüntüsü Al</label>
                 </div>
             </div>
-
-            <button type="submit" class="btn btn-primary w-100">
-                <i class="fas fa-search me-2"></i> Kontrol Et
-            </button>
+            
+            <button type="submit">🔍 Kontrol Et</button>
         </form>
-
-        <!-- Yükleniyor -->
-        <div id="loading" class="loading" style="display: none;">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Kontrol ediliyor...</span>
-            </div>
-            <p class="mt-3">Kontrol ediliyor...</p>
-        </div>
-
-        <!-- Sonuçlar -->
-        <div id="result" class="mt-4" style="display: none;">
-            <!-- Sonuçlar buraya gelecek -->
-        </div>
+        
+        <div id="result"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Tooltips'i aktifleştir
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
-
-        document.getElementById('checkForm').addEventListener('submit', async (e) => {
+        document.getElementById('urlForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            const formData = {
+                url: document.getElementById('url').value,
+                anchor: document.getElementById('anchor').value,
+                price: document.getElementById('price').value,
+                stock: document.getElementById('stock').value,
+                useProxy: document.getElementById('proxy').checked,
+                headless: document.getElementById('headless').checked,
+                screenshot: document.getElementById('screenshot').checked
+            };
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>Kontrol ediliyor...</p>';
+            
             try {
-                // Loading göster
-                document.getElementById('loading').style.display = 'block';
-                document.getElementById('result').style.display = 'none';
-                
-                const data = {
-                    url: document.getElementById('url').value,
-                    anchor_selector: document.getElementById('anchor_selector').value,
-                    price_selector: document.getElementById('price_selector').value,
-                    stock_selector: document.getElementById('stock_selector').value,
-                    use_proxy: document.getElementById('useProxy').checked,
-                    headless: document.getElementById('headless').checked,
-                    take_screenshot: document.getElementById('takeScreenshot').checked
-                };
-                
-                console.log('Gönderilen veri:', data);  // Debug için log
-                
-                const response = await fetch('http://127.0.0.1:5001/check', {
+                const response = await fetch('https://url-checker-9zo0.onrender.com/check_url', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(formData)
                 });
                 
-                console.log('Response status:', response.status);  // Debug için log
+                const data = await response.json();
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                console.log('Alınan sonuç:', result);  // Debug için log
-                
-                // Sonuçları göster
-                document.getElementById('result').style.display = 'block';
-                document.getElementById('result').innerHTML = `
-                    <div class="card result-card">
-                        <div class="card-body">
-                            <h5 class="card-title mb-4">
-                                <i class="fas fa-clipboard-check me-2"></i>Sonuçlar
-                            </h5>
-                            <div class="result-item mb-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-heading me-2"></i>
-                                        <strong>Anchor:</strong>
-                                    </div>
-                                    <span class="${result.anchor ? 'success' : 'error'}">
-                                        ${result.anchor ? 'Bulundu' : 'Bulunamadı'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="result-item mb-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-tag me-2"></i>
-                                        <strong>Fiyat:</strong>
-                                    </div>
-                                    <span class="${result.price !== '-' ? 'success' : 'error'}">
-                                        ${result.price}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="result-item mb-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-box me-2"></i>
-                                        <strong>Stok:</strong>
-                                    </div>
-                                    <span class="${result.stock ? 'success' : 'error'}">
-                                        ${result.stock ? 'Bulundu' : 'Bulunamadı'}
-                                    </span>
-                                </div>
-                            </div>
-                            ${result.screenshot ? `
-                                <div class="mt-4">
-                                    <h6 class="mb-3">
-                                        <i class="fas fa-camera me-2"></i>Ekran Görüntüsü
-                                    </h6>
-                                    <img src="data:image/png;base64,${result.screenshot}" 
-                                         class="img-fluid rounded" 
-                                         alt="Sayfa ekran görüntüsü">
-                                </div>
-                            ` : ''}
+                if (data.error) {
+                    resultDiv.innerHTML = `<div class="error">${data.error}</div>`;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="${data.accessible ? 'success' : 'error'}">
+                            <p><strong>URL:</strong> ${data.url}</p>
+                            <p><strong>Durum Kodu:</strong> ${data.status}</p>
+                            <p><strong>Erişilebilirlik:</strong> ${data.accessible ? 'Erişilebilir' : 'Erişilemez'}</p>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             } catch (error) {
-                console.error('Hata:', error);  // Debug için log
-                alert('Bir hata oluştu: ' + error);
-            } finally {
-                document.getElementById('loading').style.display = 'none';
+                resultDiv.innerHTML = `<div class="error">Hata: ${error}</div>`;
             }
         });
-
-        // Örnek değerleri doldur
-        document.getElementById('url').value = 'https://janeiredale.se/smooth-affair-mattifying-face-primer';
-        document.getElementById('anchor_selector').value = 'h1.x-name';
-        document.getElementById('price_selector').value = '.x-price .g-price';
-        document.getElementById('stock_selector').value = '.x-add-to-cart-buttons';
     </script>
 </body>
 </html>
