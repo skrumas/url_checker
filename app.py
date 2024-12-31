@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from playwright.sync_api import sync_playwright
+import requests
+from bs4 import BeautifulSoup
 import logging
 import os
 
@@ -10,70 +11,48 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def check_single_url(url, anchor=None, price=None, stock=None, headless=True):
+def check_single_url(url, anchor=None, price=None, stock=None):
     try:
-        with sync_playwright() as p:
-            # Browser launch ayarlarını güncelle
-            browser_type = p.chromium
-            browser = browser_type.launch(
-                headless=True,
-                args=[
-                    '--disable-gpu',
-                    '--disable-dev-shm-usage',
-                    '--disable-setuid-sandbox',
-                    '--no-sandbox',
-                ],
-                chromium_sandbox=False,
-                executable_path=os.environ.get('PLAYWRIGHT_BROWSERS_PATH', None)
-            )
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        result = {
+            'status': response.status_code,
+            'url': url,
+            'accessible': response.status_code == 200
+        }
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
             
-            context = browser.new_context()
-            page = context.new_page()
-            
-            try:
-                response = page.goto(url, wait_until="networkidle", timeout=30000)
-                status = response.status if response else None
-                
-                result = {
-                    'status': status,
-                    'url': url,
-                    'accessible': status == 200
-                }
-                
-                if status == 200:
-                    if anchor:
-                        try:
-                            result['anchor_text'] = page.locator(anchor).first().inner_text()
-                        except:
-                            result['anchor_text'] = 'Bulunamadı'
-                            
-                    if price:
-                        try:
-                            result['price_text'] = page.locator(price).first().inner_text()
-                        except:
-                            result['price_text'] = 'Bulunamadı'
-                            
-                    if stock:
-                        try:
-                            result['stock_text'] = page.locator(stock).first().inner_text()
-                        except:
-                            result['stock_text'] = 'Bulunamadı'
-                
-                return result, None
-                
-            except Exception as e:
-                logger.error(f"URL kontrol hatası: {str(e)}")
-                return None, str(e)
-            
-            finally:
+            if anchor:
                 try:
-                    context.close()
-                    browser.close()
+                    anchor_element = soup.select_one(anchor)
+                    result['anchor_text'] = anchor_element.text.strip() if anchor_element else 'Bulunamadı'
                 except:
-                    pass
-                
+                    result['anchor_text'] = 'Bulunamadı'
+                    
+            if price:
+                try:
+                    price_element = soup.select_one(price)
+                    result['price_text'] = price_element.text.strip() if price_element else 'Bulunamadı'
+                except:
+                    result['price_text'] = 'Bulunamadı'
+                    
+            if stock:
+                try:
+                    stock_element = soup.select_one(stock)
+                    result['stock_text'] = stock_element.text.strip() if stock_element else 'Bulunamadı'
+                except:
+                    result['stock_text'] = 'Bulunamadı'
+        
+        return result, None
+        
     except Exception as e:
-        logger.error(f"Playwright hatası: {str(e)}")
+        logger.error(f"URL kontrol hatası: {str(e)}")
         return None, str(e)
 
 @app.route('/')
