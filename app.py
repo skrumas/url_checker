@@ -6,11 +6,17 @@ import re
 import logging
 import os
 import random
+import time
+import json
 
 app = Flask(__name__)
 CORS(app)
 
-logging.basicConfig(level=logging.INFO)
+# Logging ayarları
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 def get_random_user_agent():
@@ -22,8 +28,20 @@ def get_random_user_agent():
     ]
     return random.choice(user_agents)
 
+def extract_price(text):
+    if not text:
+        return '-'
+    # Fiyat formatını kontrol et (123,45 veya 123.45)
+    price_pattern = r'\d+[.,]\d{2}'
+    match = re.search(price_pattern, text)
+    if match:
+        return match.group()
+    return '-'
+
 def check_single_url(url, anchor=None, price=None, stock=None):
     try:
+        logger.info(f"URL kontrolü başlıyor: {url}")
+        
         headers = {
             'User-Agent': get_random_user_agent(),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -35,15 +53,28 @@ def check_single_url(url, anchor=None, price=None, stock=None):
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
+            'Cache-Control': 'max-age=0',
+            'Referer': 'https://www.google.com/'
         }
         
         session = requests.Session()
+        
+        # Ana domain'i ziyaret et
+        try:
+            domain = url.split('/')[2]
+            base_url = f"https://{domain}"
+            logger.info(f"Ana domain ziyaret ediliyor: {base_url}")
+            session.get(base_url, headers=headers, timeout=30)
+            time.sleep(2)  # Kısa bekleme
+        except Exception as e:
+            logger.warning(f"Ana domain ziyareti başarısız: {str(e)}")
+        
+        # Hedef URL'yi ziyaret et
+        logger.info(f"Hedef URL ziyaret ediliyor: {url}")
         response = session.get(url, headers=headers, timeout=30, allow_redirects=True)
         
-        # Debug için
         logger.info(f"Status Code: {response.status_code}")
-        logger.info(f"Response Headers: {response.headers}")
+        logger.info(f"Response Headers: {dict(response.headers)}")
         
         result = {
             'status': response.status_code,
@@ -57,15 +88,17 @@ def check_single_url(url, anchor=None, price=None, stock=None):
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Debug için
-            logger.info(f"Page Title: {soup.title.string if soup.title else 'No title'}")
+            # Debug için sayfa başlığı
+            logger.info(f"Sayfa Başlığı: {soup.title.string if soup.title else 'Başlık yok'}")
             
+            # Anchor kontrolü
             if anchor:
                 anchor_element = soup.select_one(anchor)
                 result['anchor'] = 1 if anchor_element else 0
                 if anchor_element:
                     result['anchor_text'] = anchor_element.text.strip()
             
+            # Fiyat kontrolü
             if price:
                 price_element = soup.select_one(price)
                 if price_element:
@@ -73,26 +106,22 @@ def check_single_url(url, anchor=None, price=None, stock=None):
                     result['price'] = extract_price(price_text)
                     result['price_raw'] = price_text
             
+            # Stok kontrolü
             if stock:
                 stock_element = soup.select_one(stock)
                 result['stock'] = 1 if stock_element else 0
                 if stock_element:
                     result['stock_text'] = stock_element.text.strip()
+            
+            logger.info(f"Sonuç: {json.dumps(result, ensure_ascii=False)}")
+        else:
+            logger.warning(f"Sayfa erişilemez: HTTP {response.status_code}")
         
         return result, None
         
     except Exception as e:
         logger.error(f"URL kontrol hatası: {str(e)}")
         return None, str(e)
-
-def extract_price(text):
-    if not text:
-        return '-'
-    price_pattern = r'\d+[.,]\d{2}'
-    match = re.search(price_pattern, text)
-    if match:
-        return match.group()
-    return '-'
 
 @app.route('/')
 def index():
