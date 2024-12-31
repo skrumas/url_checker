@@ -1,6 +1,12 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 import logging
 import os
 import base64
@@ -11,70 +17,71 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def get_driver(headless=True):
+    chrome_options = Options()
+    if headless:
+        chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--disable-gpu')
+    
+    service = Service(ChromeDriverManager().install())
+    return webdriver.Chrome(service=service, options=chrome_options)
+
 def check_single_url(url, anchor=None, price=None, stock=None, use_proxy=False, headless=True, take_screenshot=False):
+    driver = None
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=headless,
-                args=[
-                    '--disable-gpu',
-                    '--disable-dev-shm-usage',
-                    '--disable-setuid-sandbox',
-                    '--no-sandbox',
-                ]
-            )
-            
-            context = browser.new_context()
-            page = context.new_page()
-            
+        driver = get_driver(headless)
+        driver.get(url)
+        
+        result = {
+            'status': 200,  # Selenium direkt status code vermez
+            'url': url,
+            'accessible': True
+        }
+        
+        # Selektörleri kontrol et
+        if anchor:
             try:
-                response = page.goto(url, wait_until="networkidle", timeout=30000)
-                status = response.status if response else None
-                
-                result = {
-                    'status': status,
-                    'url': url,
-                    'accessible': status == 200
-                }
-                
-                if status == 200:
-                    # Selektörleri kontrol et
-                    if anchor:
-                        try:
-                            result['anchor_text'] = page.locator(anchor).first().inner_text()
-                        except:
-                            result['anchor_text'] = 'Bulunamadı'
-                    
-                    if price:
-                        try:
-                            result['price_text'] = page.locator(price).first().inner_text()
-                        except:
-                            result['price_text'] = 'Bulunamadı'
-                    
-                    if stock:
-                        try:
-                            result['stock_text'] = page.locator(stock).first().inner_text()
-                        except:
-                            result['stock_text'] = 'Bulunamadı'
-                    
-                    # Ekran görüntüsü al
-                    if take_screenshot:
-                        screenshot = page.screenshot()
-                        result['screenshot'] = base64.b64encode(screenshot).decode()
-                
-                return result, None
-                
-            except Exception as e:
-                logger.error(f"URL kontrol hatası: {str(e)}")
-                return None, str(e)
-            
-            finally:
-                context.close()
-                browser.close()
-                
+                element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, anchor))
+                )
+                result['anchor_text'] = element.text
+            except:
+                result['anchor_text'] = 'Bulunamadı'
+        
+        if price:
+            try:
+                element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, price))
+                )
+                result['price_text'] = element.text
+            except:
+                result['price_text'] = 'Bulunamadı'
+        
+        if stock:
+            try:
+                element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, stock))
+                )
+                result['stock_text'] = element.text
+            except:
+                result['stock_text'] = 'Bulunamadı'
+        
+        # Ekran görüntüsü al
+        if take_screenshot:
+            screenshot = driver.get_screenshot_as_png()
+            result['screenshot'] = base64.b64encode(screenshot).decode()
+        
+        return result, None
+        
     except Exception as e:
-        logger.error(f"Playwright hatası: {str(e)}")
+        logger.error(f"Selenium hatası: {str(e)}")
         return None, str(e)
+    
+    finally:
+        if driver:
+            driver.quit()
 
 @app.route('/')
 def index():
