@@ -7,23 +7,24 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Logging ayarları
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def check_single_url(url, anchor=None, price=None, stock=None, headless=True):
     try:
         with sync_playwright() as p:
-            # Tarayıcı ayarları
-            browser = p.chromium.launch(
-                headless=headless,
+            # Browser launch ayarlarını güncelle
+            browser_type = p.chromium
+            browser = browser_type.launch(
+                headless=True,
                 args=[
                     '--disable-gpu',
                     '--disable-dev-shm-usage',
                     '--disable-setuid-sandbox',
                     '--no-sandbox',
                 ],
-                chromium_sandbox=False
+                chromium_sandbox=False,
+                executable_path=os.environ.get('PLAYWRIGHT_BROWSERS_PATH', None)
             )
             
             context = browser.new_context()
@@ -39,14 +40,24 @@ def check_single_url(url, anchor=None, price=None, stock=None, headless=True):
                     'accessible': status == 200
                 }
                 
-                # Selektörleri kontrol et
                 if status == 200:
                     if anchor:
-                        result['anchor_text'] = page.locator(anchor).first().inner_text()
+                        try:
+                            result['anchor_text'] = page.locator(anchor).first().inner_text()
+                        except:
+                            result['anchor_text'] = 'Bulunamadı'
+                            
                     if price:
-                        result['price_text'] = page.locator(price).first().inner_text()
+                        try:
+                            result['price_text'] = page.locator(price).first().inner_text()
+                        except:
+                            result['price_text'] = 'Bulunamadı'
+                            
                     if stock:
-                        result['stock_text'] = page.locator(stock).first().inner_text()
+                        try:
+                            result['stock_text'] = page.locator(stock).first().inner_text()
+                        except:
+                            result['stock_text'] = 'Bulunamadı'
                 
                 return result, None
                 
@@ -55,8 +66,11 @@ def check_single_url(url, anchor=None, price=None, stock=None, headless=True):
                 return None, str(e)
             
             finally:
-                context.close()
-                browser.close()
+                try:
+                    context.close()
+                    browser.close()
+                except:
+                    pass
                 
     except Exception as e:
         logger.error(f"Playwright hatası: {str(e)}")
@@ -74,12 +88,11 @@ def check_url():
         anchor = data.get('anchor')
         price = data.get('price')
         stock = data.get('stock')
-        headless = data.get('headless', True)
         
         if not url:
             return jsonify({'error': 'URL gerekli'}), 400
 
-        result, error = check_single_url(url, anchor, price, stock, headless)
+        result, error = check_single_url(url, anchor, price, stock)
         
         if error:
             return jsonify({'error': f'Bir hata oluştu: {error}'}), 500
