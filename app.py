@@ -1,11 +1,6 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from requests_html import HTMLSession
 import base64
 import logging
 import os
@@ -19,103 +14,96 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_chrome_options(use_proxy=False, headless=True):
-    chrome_options = Options()
-    
-    if headless:
-        chrome_options.add_argument('--headless')
-    
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--window-size=1920,1080')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    
-    if use_proxy:
-        # Ücretsiz proxy listesi
-        proxies = [
-            '103.152.112.162:80',
-            '193.239.86.249:3128',
-            '195.158.3.198:3128'
-        ]
-        proxy = random.choice(proxies)
-        chrome_options.add_argument(f'--proxy-server={proxy}')
-    
-    return chrome_options
+def get_random_user_agent():
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/122.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edge/122.0.0.0',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Firefox/123.0'
+    ]
+    return random.choice(user_agents)
 
 def check_single_url(url, anchor=None, price=None, stock=None, use_proxy=False, headless=True, take_screenshot=False):
-    driver = None
     try:
         logger.info(f"URL kontrolü başlıyor: {url}")
-        logger.info(f"Proxy: {use_proxy}, Headless: {headless}, Screenshot: {take_screenshot}")
         
-        options = get_chrome_options(use_proxy, headless)
-        driver = webdriver.Chrome(options=options)
-        driver.set_page_load_timeout(30)
+        session = HTMLSession()
         
-        # URL'yi ziyaret et
-        driver.get(url)
-        time.sleep(3)  # Sayfanın yüklenmesi için bekle
+        headers = {
+            'User-Agent': get_random_user_agent(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive'
+        }
+        
+        proxies = None
+        if use_proxy:
+            proxy_list = [
+                'http://103.152.112.162:80',
+                'http://193.239.86.249:3128',
+                'http://195.158.3.198:3128'
+            ]
+            proxy = random.choice(proxy_list)
+            proxies = {
+                'http': proxy,
+                'https': proxy
+            }
+        
+        response = session.get(
+            url, 
+            headers=headers, 
+            proxies=proxies if use_proxy else None
+        )
+        
+        # JavaScript'i çalıştır
+        response.html.render(timeout=20)
         
         result = {
-            'status': 200,  # Selenium direkt status code vermez
+            'status': response.status_code,
             'url': url,
-            'accessible': True,
+            'accessible': response.status_code == 200,
             'anchor': 0,
             'price': '-',
             'stock': 0
         }
         
-        # Ekran görüntüsü al
-        if take_screenshot:
-            screenshot = driver.get_screenshot_as_png()
-            result['screenshot'] = base64.b64encode(screenshot).decode('utf-8')
+        if response.status_code == 200:
+            # Ekran görüntüsü
+            if take_screenshot:
+                try:
+                    screenshot = response.html.screenshot(full=True)
+                    result['screenshot'] = base64.b64encode(screenshot).decode('utf-8')
+                except:
+                    logger.warning("Ekran görüntüsü alınamadı")
+            
+            # Anchor kontrolü
+            if anchor:
+                elements = response.html.find(anchor)
+                if elements:
+                    result['anchor'] = 1
+                    result['anchor_text'] = elements[0].text
+            
+            # Fiyat kontrolü
+            if price:
+                elements = response.html.find(price)
+                if elements:
+                    price_text = elements[0].text
+                    result['price'] = extract_price(price_text)
+                    result['price_raw'] = price_text
+            
+            # Stok kontrolü
+            if stock:
+                elements = response.html.find(stock)
+                result['stock'] = 1 if elements else 0
+                if elements:
+                    result['stock_text'] = elements[0].text
         
-        # Anchor kontrolü
-        if anchor:
-            try:
-                element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, anchor))
-                )
-                result['anchor'] = 1
-                result['anchor_text'] = element.text.strip()
-            except:
-                result['anchor'] = 0
-        
-        # Fiyat kontrolü
-        if price:
-            try:
-                element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, price))
-                )
-                price_text = element.text.strip()
-                result['price'] = extract_price(price_text)
-                result['price_raw'] = price_text
-            except:
-                result['price'] = '-'
-        
-        # Stok kontrolü
-        if stock:
-            try:
-                element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, stock))
-                )
-                result['stock'] = 1
-                result['stock_text'] = element.text.strip()
-            except:
-                result['stock'] = 0
-        
-        logger.info(f"Sonuç: {json.dumps(result, ensure_ascii=False)}")
         return result, None
         
     except Exception as e:
         logger.error(f"URL kontrol hatası: {str(e)}")
         return None, str(e)
-    
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
 
 def extract_price(text):
     if not text:
