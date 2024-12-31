@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 import re
 import logging
@@ -12,7 +12,6 @@ import json
 app = Flask(__name__)
 CORS(app)
 
-# Logging ayarları
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -31,7 +30,6 @@ def get_random_user_agent():
 def extract_price(text):
     if not text:
         return '-'
-    # Fiyat formatını kontrol et (123,45 veya 123.45)
     price_pattern = r'\d+[.,]\d{2}'
     match = re.search(price_pattern, text)
     if match:
@@ -42,36 +40,28 @@ def check_single_url(url, anchor=None, price=None, stock=None):
     try:
         logger.info(f"URL kontrolü başlıyor: {url}")
         
-        headers = {
-            'User-Agent': get_random_user_agent(),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0',
-            'Referer': 'https://www.google.com/'
-        }
-        
-        session = requests.Session()
+        # CloudScraper ile scraper oluştur
+        scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'mobile': False
+            }
+        )
         
         # Ana domain'i ziyaret et
         try:
             domain = url.split('/')[2]
             base_url = f"https://{domain}"
             logger.info(f"Ana domain ziyaret ediliyor: {base_url}")
-            session.get(base_url, headers=headers, timeout=30)
-            time.sleep(2)  # Kısa bekleme
+            scraper.get(base_url)
+            time.sleep(2)
         except Exception as e:
             logger.warning(f"Ana domain ziyareti başarısız: {str(e)}")
         
         # Hedef URL'yi ziyaret et
         logger.info(f"Hedef URL ziyaret ediliyor: {url}")
-        response = session.get(url, headers=headers, timeout=30, allow_redirects=True)
+        response = scraper.get(url)
         
         logger.info(f"Status Code: {response.status_code}")
         logger.info(f"Response Headers: {dict(response.headers)}")
@@ -88,17 +78,14 @@ def check_single_url(url, anchor=None, price=None, stock=None):
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Debug için sayfa başlığı
             logger.info(f"Sayfa Başlığı: {soup.title.string if soup.title else 'Başlık yok'}")
             
-            # Anchor kontrolü
             if anchor:
                 anchor_element = soup.select_one(anchor)
                 result['anchor'] = 1 if anchor_element else 0
                 if anchor_element:
                     result['anchor_text'] = anchor_element.text.strip()
             
-            # Fiyat kontrolü
             if price:
                 price_element = soup.select_one(price)
                 if price_element:
@@ -106,7 +93,6 @@ def check_single_url(url, anchor=None, price=None, stock=None):
                     result['price'] = extract_price(price_text)
                     result['price_raw'] = price_text
             
-            # Stok kontrolü
             if stock:
                 stock_element = soup.select_one(stock)
                 result['stock'] = 1 if stock_element else 0
