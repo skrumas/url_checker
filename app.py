@@ -1,15 +1,9 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+import requests
+from bs4 import BeautifulSoup
 import logging
 import os
-import base64
 
 app = Flask(__name__)
 CORS(app)
@@ -17,71 +11,49 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_driver(headless=True):
-    chrome_options = Options()
-    if headless:
-        chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--disable-gpu')
-    
-    service = Service(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=chrome_options)
-
-def check_single_url(url, anchor=None, price=None, stock=None, use_proxy=False, headless=True, take_screenshot=False):
-    driver = None
+def check_single_url(url, anchor=None, price=None, stock=None):
     try:
-        driver = get_driver(headless)
-        driver.get(url)
-        
-        result = {
-            'status': 200,  # Selenium direkt status code vermez
-            'url': url,
-            'accessible': True
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
-        # Selektörleri kontrol et
-        if anchor:
-            try:
-                element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, anchor))
-                )
-                result['anchor_text'] = element.text
-            except:
-                result['anchor_text'] = 'Bulunamadı'
+        response = requests.get(url, headers=headers, timeout=30)
         
-        if price:
-            try:
-                element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, price))
-                )
-                result['price_text'] = element.text
-            except:
-                result['price_text'] = 'Bulunamadı'
+        result = {
+            'status': response.status_code,
+            'url': url,
+            'accessible': response.status_code == 200
+        }
         
-        if stock:
-            try:
-                element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, stock))
-                )
-                result['stock_text'] = element.text
-            except:
-                result['stock_text'] = 'Bulunamadı'
-        
-        # Ekran görüntüsü al
-        if take_screenshot:
-            screenshot = driver.get_screenshot_as_png()
-            result['screenshot'] = base64.b64encode(screenshot).decode()
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'lxml')
+            
+            if anchor:
+                try:
+                    anchor_element = soup.select_one(anchor)
+                    result['anchor_text'] = anchor_element.text.strip() if anchor_element else 'Bulunamadı'
+                except Exception as e:
+                    result['anchor_text'] = f'Bulunamadı (Hata: {str(e)})'
+                    
+            if price:
+                try:
+                    price_element = soup.select_one(price)
+                    result['price_text'] = price_element.text.strip() if price_element else 'Bulunamadı'
+                except Exception as e:
+                    result['price_text'] = f'Bulunamadı (Hata: {str(e)})'
+                    
+            if stock:
+                try:
+                    stock_element = soup.select_one(stock)
+                    result['stock_text'] = stock_element.text.strip() if stock_element else 'Bulunamadı'
+                except Exception as e:
+                    result['stock_text'] = f'Bulunamadı (Hata: {str(e)})'
         
         return result, None
         
     except Exception as e:
-        logger.error(f"Selenium hatası: {str(e)}")
+        logger.error(f"URL kontrol hatası: {str(e)}")
         return None, str(e)
-    
-    finally:
-        if driver:
-            driver.quit()
 
 @app.route('/')
 def index():
@@ -95,22 +67,11 @@ def check_url():
         anchor = data.get('anchor')
         price = data.get('price')
         stock = data.get('stock')
-        use_proxy = data.get('useProxy', False)
-        headless = data.get('headless', True)
-        take_screenshot = data.get('screenshot', False)
         
         if not url:
             return jsonify({'error': 'URL gerekli'}), 400
 
-        result, error = check_single_url(
-            url, 
-            anchor, 
-            price, 
-            stock, 
-            use_proxy, 
-            headless, 
-            take_screenshot
-        )
+        result, error = check_single_url(url, anchor, price, stock)
         
         if error:
             return jsonify({'error': f'Bir hata oluştu: {error}'}), 500
